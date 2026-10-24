@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { answerQuestion, loadDocuments } from './assistant.js';
+import { answerQuestion } from './assistant.js';
 import './App.css';
 
 const HISTORY_KEY = 'sri-document-assistant-conversations';
@@ -23,8 +23,7 @@ function App() {
   const [conversacionActiva, setConversacionActiva] = useState(null);
   const [mensaje, setMensaje] = useState('');
   const [cargando, setCargando] = useState(false);
-  const [estadoIndice, setEstadoIndice] = useState('comprobando');
-  const [progresoModelo, setProgresoModelo] = useState('');
+  const estadoIndice = 'disponible';
   const chatEndRef = useRef(null);
   const textareaRef = useRef(null);
 
@@ -41,12 +40,6 @@ function App() {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [chat, cargando]);
-
-  useEffect(() => {
-    loadDocuments()
-      .then(() => setEstadoIndice('disponible'))
-      .catch(() => setEstadoIndice('incompleto'));
-  }, []);
 
   const iniciarConversacion = () => {
     setConversacionActiva(null);
@@ -79,7 +72,7 @@ function App() {
     setCargando(true);
 
     try {
-      const data = await answerQuestion(pregunta, setProgresoModelo);
+      const data = await answerQuestion(pregunta);
       setConversaciones((prev) => prev.map((item) => item.id === id
         ? {
           ...item,
@@ -107,7 +100,6 @@ function App() {
         : item));
     } finally {
       setCargando(false);
-      setProgresoModelo('');
     }
   };
 
@@ -119,7 +111,7 @@ function App() {
   };
 
   const estadoTexto = {
-    disponible: 'Base documental lista',
+    disponible: 'Asistente en línea',
     incompleto: 'Índice documental pendiente',
     comprobando: 'Cargando documentos',
   }[estadoIndice];
@@ -161,7 +153,7 @@ function App() {
             <span className={`status-dot status-${estadoIndice}`} aria-hidden="true" />
             <span>{estadoTexto}</span>
           </div>
-          <p>Modelo local en el navegador. Primera carga requiere conexión.</p>
+          <p>Las consultas se responden en línea; no se usa la GPU del dispositivo.</p>
         </footer>
       </aside>
 
@@ -186,7 +178,7 @@ function App() {
             <div className="welcome-panel">
               <div className="welcome-mark" aria-hidden="true">SRI</div>
               <h1>¿En qué puedo ayudarte?</h1>
-              <p>Consulta normativa con un modelo local. Tus preguntas se procesan en este navegador.</p>
+              <p>Consulta normativa con IA en la nube y fuentes del corpus oficial.</p>
               <div className="suggestions" aria-label="Preguntas sugeridas">
                 {SUGGESTED_QUESTIONS.map((question) => (
                   <button
@@ -242,7 +234,7 @@ function App() {
                 <div className="loading-message" role="status">
                   <span className="assistant-avatar" aria-hidden="true">SRI</span>
                   <span className="loading-indicator" aria-hidden="true" />
-                  {progresoModelo || 'Buscando en documentos y preparando el modelo local...'}
+                  Buscando en los documentos y consultando el modelo en línea...
                 </div>
               )}
               <div ref={chatEndRef} />

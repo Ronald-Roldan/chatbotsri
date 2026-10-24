@@ -1,92 +1,125 @@
-const HUGGING_FACE_MODEL_PREFIX = (
-  'mlc-ai/Llama-3.2-1B-Instruct-q4f16_1-MLC/resolve/main/'
-);
-const GITHUB_MODEL_LIBRARY = (
-  'mlc-ai/binary-mlc-llm-libs/main/web-llm-models/v0_2_86/base/'
-  + 'Llama-3.2-1B-Instruct-q4f16_1_cs1k-webgpu.wasm'
-);
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
-  'Access-Control-Allow-Headers': 'Range, If-Range, If-None-Match',
-  'Access-Control-Expose-Headers': (
-    'Accept-Ranges, Content-Length, Content-Range, ETag, Last-Modified'
-  ),
-  'Access-Control-Max-Age': '86400',
-};
+import {
+  createExtractiveFallback,
+  findVerifiedInvestmentStabilityAnswer,
+  findVerifiedZoneValidityAnswer,
+  retrieveDocuments,
+} from './src/retrieval.js';
 
-function getModelUrl(pathname) {
-  if (pathname.startsWith('/model/hf/')) {
-    const modelPath = pathname.slice('/model/hf/'.length);
-    if (!modelPath.startsWith(HUGGING_FACE_MODEL_PREFIX)) return null;
+const MODEL_ID = '@cf/meta/llama-3.2-1b-instruct';
+const MAX_QUESTION_LENGTH = 2000;
+let documentsPromise;
 
-    const filename = modelPath.slice(HUGGING_FACE_MODEL_PREFIX.length);
-    const isAllowedFile = (
-      /^(mlc-chat-config|ndarray-cache|tensor-cache|tokenizer|tokenizer_config)\.json$/.test(filename)
-      || /^params_shard_\d+\.bin$/.test(filename)
-    );
-    return isAllowedFile ? `https://huggingface.co/${modelPath}` : null;
-  }
-
-  if (pathname === `/model/github/${GITHUB_MODEL_LIBRARY}`) {
-    return `https://raw.githubusercontent.com/${GITHUB_MODEL_LIBRARY}`;
-  }
-
-  return null;
+function jsonResponse(body, status = 200) {
+  return Response.json(body, {
+    status,
+    headers: { 'Cache-Control': 'no-store' },
+  });
 }
 
-async function proxyModelRequest(request, url) {
-  const headers = new Headers();
-  for (const header of ['range', 'if-range', 'if-none-match', 'if-modified-since']) {
-    const value = request.headers.get(header);
-    if (value) headers.set(header, value);
-  }
-
-  let upstream;
-  try {
-    upstream = await fetch(url, {
-      method: request.method,
-      headers,
-      redirect: 'follow',
+async function loadDocuments(request, assets) {
+  documentsPromise ??= assets.fetch(new Request(new URL('/documents.json', request.url)))
+    .then(async (response) => {
+      if (!response.ok) throw new Error(`No se pudo cargar el corpus (${response.status}).`);
+      const documents = await response.json();
+      if (!Array.isArray(documents) || documents.length === 0) {
+        throw new Error('El corpus documental está vacío.');
+      }
+      return documents;
+    })
+    .catch((error) => {
+      documentsPromise = undefined;
+      throw error;
     });
+  return documentsPromise;
+}
+
+function getAnswerText(result) {
+  if (typeof result === 'string') return result.trim();
+  if (result && typeof result === 'object' && 'response' in result) {
+    return typeof result.response === 'string' ? result.response.trim() : '';
+  }
+  return '';
+}
+
+async function answerQuestion(request, env) {
+  if (!request.headers.get('content-type')?.includes('application/json')) {
+    return jsonResponse({ error: 'El contenido debe enviarse como application/json.' }, 415);
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return jsonResponse({ error: 'El cuerpo de la consulta no es JSON válido.' }, 400);
+  }
+
+  const question = typeof body?.question === 'string' ? body.question.trim() : '';
+  if (!question || question.length > MAX_QUESTION_LENGTH) {
+    return jsonResponse({
+      error: `La pregunta debe tener entre 1 y ${MAX_QUESTION_LENGTH} caracteres.`,
+    }, 400);
+  }
+
+  const documents = await loadDocuments(request, env.ASSETS);
+  const verifiedAnswer = findVerifiedZoneValidityAnswer(question, documents)
+    ?? findVerifiedInvestmentStabilityAnswer(question, documents);
+  if (verifiedAnswer) return jsonResponse(verifiedAnswer);
+
+  const matches = retrieveDocuments(question, documents);
+  if (matches.length === 0) {
+    return jsonResponse({
+      answer: 'No encontré fragmentos pertinentes en los documentos incorporados para responder esta consulta.',
+      sources: [],
+      mode: 'sin_resultados',
+    });
+  }
+
+  const sources = [...new Set(matches.map(({ source, page }) => `${source}, pág. ${page}`))];
+  const context = matches
+    .map(({ source, page, text }) => `[Fuente: ${source}, pág. ${page}]\n${text}`)
+    .join('\n\n')
+    .slice(0, 12000);
+
+  try {
+    const result = await env.AI.run(MODEL_ID, {
+      messages: [
+        {
+          role: 'system',
+          content: 'Eres un asistente jurídico-documental del SRI. Responde en español y exclusivamente con el contexto. Identifica el artículo que trata el tema concreto; no confundas artículos que solo comparten palabras. Para cifras, plazos y requisitos, exige evidencia textual directa. Si la evidencia no basta o el documento indica que una norma fue derogada, adviértelo claramente. No inventes artículos, vigencia ni fuentes. Responde de forma directa en máximo 120 palabras.',
+        },
+        {
+          role: 'user',
+          content: `Contexto documental:\n${context}\n\nPregunta: ${question}`,
+        },
+      ],
+      temperature: 0.1,
+      max_tokens: 320,
+    });
+    const answer = getAnswerText(result);
+    if (!answer) throw new Error('Workers AI no devolvió texto para la respuesta.');
+    return jsonResponse({ answer, sources, mode: 'generada' });
   } catch (error) {
-    console.error('No se pudo descargar un archivo del modelo', error);
-    return new Response('No se pudo descargar el modelo.', { status: 502 });
+    console.error('Falló la inferencia de Workers AI; se mostrarán extractos documentales.', error);
+    return jsonResponse(createExtractiveFallback(matches));
   }
-
-  const responseHeaders = new Headers(upstream.headers);
-  for (const [name, value] of Object.entries(CORS_HEADERS)) {
-    responseHeaders.set(name, value);
-  }
-
-  return new Response(request.method === 'HEAD' ? null : upstream.body, {
-    status: upstream.status,
-    statusText: upstream.statusText,
-    headers: responseHeaders,
-  });
 }
 
 export default {
   async fetch(request, env) {
-    const requestUrl = new URL(request.url);
-    if (!requestUrl.pathname.startsWith('/model/')) {
-      return env.ASSETS.fetch(request);
+    const url = new URL(request.url);
+    if (url.pathname === '/api/answer') {
+      if (request.method !== 'POST') {
+        return jsonResponse({ error: 'Método no permitido.' }, 405);
+      }
+
+      try {
+        return await answerQuestion(request, env);
+      } catch (error) {
+        console.error('No se pudo procesar la consulta documental.', error);
+        return jsonResponse({ error: 'No se pudo consultar la base documental en línea.' }, 502);
+      }
     }
 
-    if (request.method === 'OPTIONS') {
-      return new Response(null, { status: 204, headers: CORS_HEADERS });
-    }
-    if (request.method !== 'GET' && request.method !== 'HEAD') {
-      return new Response('Método no permitido.', {
-        status: 405,
-        headers: { Allow: 'GET, HEAD, OPTIONS' },
-      });
-    }
-
-    const modelUrl = getModelUrl(requestUrl.pathname);
-    if (!modelUrl) {
-      return new Response('Archivo de modelo no permitido.', { status: 404 });
-    }
-    return proxyModelRequest(request, modelUrl);
+    return env.ASSETS.fetch(request);
   },
 };

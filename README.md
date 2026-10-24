@@ -1,13 +1,13 @@
 # Asistente virtual documental del SRI
 
-Aplicación web para consultar normativa del SRI. El modo web ejecuta la búsqueda y el modelo de lenguaje dentro del navegador: no necesita una API propia, Ollama, Gemini ni una clave de proveedor de IA.
+Aplicación web para consultar normativa del SRI. La búsqueda documental y la generación de respuestas se ejecutan en Cloudflare: el navegador no descarga ni ejecuta modelos y no necesita GPU.
 
-## Modo web gratuito
+## Modo web en línea
 
 ### Requisitos
 
 - Node.js 20.19 o superior.
-- Navegador actualizado con WebGPU, por ejemplo Chrome o Edge en un equipo compatible.
+- Un navegador actualizado y conexión a Internet.
 
 ### Probar localmente
 
@@ -19,7 +19,15 @@ npm ci
 npm run dev
 ```
 
-Abre la dirección local que indique Vite. La primera pregunta descarga el modelo WebLLM al navegador; la descarga puede ser grande y requiere conexión a Internet. El modelo se almacena en la caché del navegador y las consultas posteriores se procesan en el equipo. El rendimiento depende de la memoria y la GPU disponibles.
+Para probar la aplicación completa localmente, compila los recursos y ejecuta el Worker con Wrangler:
+
+```powershell
+npm ci
+npm run build
+npx wrangler@4 dev --config wrangler.jsonc
+```
+
+Wrangler debe estar autenticado con la cuenta de Cloudflare que contiene el binding de Workers AI. Las llamadas al modelo desde el entorno local también consumen la cuota de esa cuenta.
 
 ### Publicar gratis en Cloudflare Workers
 
@@ -32,11 +40,11 @@ Abre la dirección local que indique Vite. La primera pregunta descarga el model
    py scripts\export_web_corpus.py
    ```
 
-2. En Cloudflare **Workers & Pages**, conecta el Worker `frontend` con `Ronald-Roldan/chatbotsri`, rama `main`, y configura `frontend` como directorio raíz. Usa `npm run build` como comando de compilación y `npx wrangler deploy --config wrangler.jsonc` como comando de implementación.
+2. En Cloudflare **Workers & Pages**, conecta el Worker `frontend` con `Ronald-Roldan/chatbotsri`, rama `main`, y configura `frontend` como directorio raíz. Usa `npm run build` como comando de compilación y `npx wrangler deploy --config wrangler.jsonc` como comando de implementación. La configuración crea el binding `AI` de Workers AI.
 3. Cloudflare Workers Builds implementa automáticamente los cambios de `main`. GitHub Actions ejecuta por separado las pruebas, el lint y la compilación; no necesita secretos ni variables de Cloudflare.
-4. No configures URL de API ni claves de IA. El Worker solo reenvía rutas permitidas de los archivos públicos del modelo y sirve el sitio.
+4. No configures claves de IA ni GPU en el navegador. El Worker carga el corpus, recupera los fragmentos pertinentes y llama al modelo `@cf/meta/llama-3.2-1b-instruct` alojado por Cloudflare.
 
-El sitio y el corpus normativo serán públicos. Las preguntas se procesan en el navegador; el Worker reenvía solo los archivos del modelo permitidos desde Hugging Face y GitHub para evitar errores CORS. La primera carga del modelo descarga alrededor de 700 MB. La disponibilidad y cuotas del plan gratuito de alojamiento están sujetas a las condiciones de Cloudflare.
+El sitio y el corpus normativo son públicos. Las preguntas y los fragmentos consultados se envían al Worker de Cloudflare para la inferencia. Workers AI incluye actualmente 10.000 Neurons gratuitos por día por cuenta; al alcanzar el límite diario, la aplicación presenta extractos documentales con sus fuentes en lugar de depender del modelo. Consulta los [precios y límites vigentes de Workers AI](https://developers.cloudflare.com/workers-ai/platform/pricing/).
 
 El despliegue también puede ejecutarse manualmente desde un equipo que ya tenga Wrangler autenticado: desde `frontend/`, ejecuta `npm ci`, `npm run build` y `npx wrangler deploy --config wrangler.jsonc`.
 
@@ -58,4 +66,4 @@ La API queda disponible en `http://127.0.0.1:8000` y la documentación en `/docs
 
 ## Precisión y privacidad
 
-La recuperación combina coincidencia léxica ponderada y fragmentos identificados por página. Algunas consultas conocidas tienen respuestas determinísticas; las demás se redactan con el modelo local del navegador y se limitan a los fragmentos recuperados. Si WebGPU o el modelo no están disponibles, la consulta no se pierde: el asistente muestra los extractos recuperados con sus fuentes, sin inventar una respuesta generada. El requisito de estabilidad tributaria de más de USD 100 millones se identifica como texto del documento y se acompaña de una advertencia porque el propio corpus señala que ese capítulo fue derogado en 2019. La calidad depende de la legibilidad y vigencia de los PDF. Contrasta las respuestas con la publicación oficial antes de tomar decisiones legales.
+La recuperación combina coincidencia léxica ponderada y fragmentos identificados por página. Algunas consultas conocidas tienen respuestas determinísticas; las demás se redactan en Cloudflare AI y se limitan a los fragmentos recuperados. Si el modelo en la nube no está disponible o se agota la cuota gratuita, el asistente muestra el extracto documental más pertinente con su fuente, sin inventar una respuesta generada. El requisito de estabilidad tributaria de más de USD 100 millones se identifica como texto del documento y se acompaña de una advertencia porque el propio corpus señala que ese capítulo fue derogado en 2019. La calidad depende de la legibilidad y vigencia de los PDF. Contrasta las respuestas con la publicación oficial antes de tomar decisiones legales.
