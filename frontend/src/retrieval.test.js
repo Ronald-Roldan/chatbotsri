@@ -58,6 +58,36 @@ test('lexical retrieval ranks the exact free-zone validity article above CEPAI d
   assert.equal(matches[0].page, 24);
 });
 
+test('an explicitly requested article excludes a neighboring article even on the same page', () => {
+  const documents = [
+    {
+      text: 'Art. 16 Modalidades de inversión. Las modalidades y sus excepciones se establecerán en el Reglamento.',
+      source: 'COPCI.pdf',
+      page: 10,
+    },
+    {
+      text: 'Art. 16.1 Estabilidad jurídica de la inversión. Se podrá otorgar estabilidad jurídica a normativa sectorial específica declarada esencial en contratos de concesión. El plazo será el mismo del contrato de inversión.',
+      source: 'COPCI.pdf',
+      page: 10,
+    },
+    {
+      text: 'Art. 17 Contratos de inversión.',
+      source: 'COPCI.pdf',
+      page: 11,
+    },
+  ];
+
+  const matches = retrieveDocuments(
+    '¿Qué establece el artículo 16.1 sobre la estabilidad jurídica de la inversión?',
+    documents,
+  );
+
+  assert.equal(matches.length, 1);
+  assert.match(matches[0].text, /estabilidad jurídica de la inversión/i);
+  assert.doesNotMatch(matches[0].text, /Las modalidades y sus excepciones/);
+  assert.deepEqual(retrieveDocuments('¿Qué establece el artículo 99?', documents), []);
+});
+
 test('investment stability answer preserves the greater-than threshold and repeal warning', () => {
   const documents = [
     {

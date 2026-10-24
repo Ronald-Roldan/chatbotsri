@@ -14,6 +14,11 @@ const documents = [
     page: 24,
   },
   {
+    text: 'Art. 16 Modalidades de inversión. Las modalidades de inversión y sus excepciones se establecerán en el Reglamento.',
+    source: 'COPCI.pdf',
+    page: 10,
+  },
+  {
     text: 'Art. 16.1 Estabilidad jurídica de la inversión. Además de la estabilidad tributaria que se garantiza en este Código, se podrá otorgar estabilidad jurídica de la normativa sectorial específica declarada como esencial en contratos de concesión. El plazo de vigencia de dicha estabilidad jurídica será el mismo plazo del contrato de inversión.',
     source: 'COPCI.pdf',
     page: 10,
@@ -75,6 +80,7 @@ test('API calls Cloudflare hosted inference with retrieved text and source citat
   assert.equal(response.status, 200);
   assert.equal(model, '@cf/meta/llama-3.2-1b-instruct');
   assert.match(options.messages[1].content, /Art\. 16\.1/);
+  assert.doesNotMatch(options.messages[1].content, /Las modalidades de inversión/);
   assert.match(options.messages[1].content, /COPCI\.pdf, pág\. 10/);
   assert.match(body.answer, /estabilidad jurídica/);
   assert.equal(body.mode, 'generada');

@@ -23,7 +23,23 @@ export function normalizeTerms(text) {
     .match(/[a-z0-9]{3,}/g) ?? [];
 }
 
+function requestedArticleNumber(question) {
+  const normalizedQuestion = question
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('es');
+  return normalizedQuestion.match(/\b(?:articulo|art)\.?\s*(\d+(?:\.\d+)?)/)?.[1] ?? null;
+}
+
 export function retrieveDocuments(question, documents, limit = 5) {
+  const articleNumber = requestedArticleNumber(question);
+  const candidateDocuments = articleNumber
+    ? documents.filter(({ text }) => (
+      new RegExp(`\\bArt\\.?\\s*${articleNumber.replace('.', '\\.')}(?![\\d.])`, 'i').test(text)
+    ))
+    : documents;
+  if (candidateDocuments.length === 0) return [];
+
   const queryTerms = new Set(normalizeTerms(question).filter((term) => !STOP_WORDS.has(term)));
   const expandedTerms = new Set(queryTerms);
   for (const term of queryTerms) {
@@ -33,7 +49,7 @@ export function retrieveDocuments(question, documents, limit = 5) {
 
   if (expandedTerms.size === 0) return [];
 
-  const tokenizedDocuments = documents.map((document) => normalizeTerms(document.text));
+  const tokenizedDocuments = candidateDocuments.map((document) => normalizeTerms(document.text));
   const documentFrequency = new Map();
   for (const tokens of tokenizedDocuments) {
     for (const term of new Set(tokens)) {
@@ -46,7 +62,7 @@ export function retrieveDocuments(question, documents, limit = 5) {
   const averageLength = tokenizedDocuments.reduce((sum, tokens) => sum + tokens.length, 0)
     / Math.max(tokenizedDocuments.length, 1);
 
-  return documents
+  return candidateDocuments
     .map((document, index) => {
       const tokens = tokenizedDocuments[index];
       const counts = new Map();
@@ -58,7 +74,7 @@ export function retrieveDocuments(question, documents, limit = 5) {
         if (!frequency) continue;
         const docFrequency = documentFrequency.get(term) ?? 0;
         const idf = Math.log(
-          1 + (documents.length - docFrequency + 0.5) / (docFrequency + 0.5),
+          1 + (candidateDocuments.length - docFrequency + 0.5) / (docFrequency + 0.5),
         );
         const denominator = frequency + 1.2 * (
           1 - 0.75 + 0.75 * tokens.length / Math.max(averageLength, 1)
