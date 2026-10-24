@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { findVerifiedZoneValidityAnswer, retrieveDocuments } from './retrieval.js';
+import {
+  createExtractiveFallback,
+  findVerifiedInvestmentStabilityAnswer,
+  findVerifiedZoneValidityAnswer,
+  retrieveDocuments,
+} from './retrieval.js';
 
 test('exact COPCI free-zone validity question uses Article 46 and page 24', () => {
   const documents = [
@@ -51,4 +56,49 @@ test('lexical retrieval ranks the exact free-zone validity article above CEPAI d
   );
 
   assert.equal(matches[0].page, 24);
+});
+
+test('investment stability answer preserves the greater-than threshold and repeal warning', () => {
+  const documents = [
+    {
+      text: 'Dicha estabilidad tributaria también podrá ser concedida a petición de parte, en el contrato de inversión de las sociedades de otros sectores, siempre que: 1. El monto de la inversión sea mayor a 100 millones de dólares.',
+      source: 'COPCI.pdf',
+      page: 16,
+    },
+    {
+      text: 'Ley 0 derogada por Ley No. 0, publicada en Registro Oficial Suplemento 484 de 9 de Mayo del 2019.',
+      source: 'COPCI.pdf',
+      page: 16,
+    },
+  ];
+
+  const answer = findVerifiedInvestmentStabilityAnswer(
+    'Según el COPCI, ¿cuál es el monto mínimo de inversión para solicitar estabilidad tributaria a petición de parte?',
+    documents,
+  );
+
+  assert.equal(answer.mode, 'verificada');
+  assert.match(answer.answer, /mayor a USD 100 millones/);
+  assert.match(answer.answer, /derogado en 2019/);
+  assert.deepEqual(answer.sources, ['COPCI.pdf, pág. 16']);
+});
+
+test('investment stability threshold is not inferred when the document lacks it', () => {
+  const answer = findVerifiedInvestmentStabilityAnswer(
+    '¿Cuál es el monto mínimo de inversión para estabilidad tributaria a petición de parte?',
+    [{ text: 'El contrato de inversión podrá establecer estabilidad tributaria.' }],
+  );
+
+  assert.equal(answer, null);
+});
+
+test('model fallback returns cited document excerpts instead of a failed chat', () => {
+  const answer = createExtractiveFallback([
+    { text: 'El monto de inversión será mayor a 100 millones.', source: 'COPCI.pdf', page: 16 },
+  ]);
+
+  assert.equal(answer.mode, 'extractiva');
+  assert.match(answer.answer, /No se pudo iniciar el modelo/);
+  assert.match(answer.answer, /mayor a 100 millones/);
+  assert.deepEqual(answer.sources, ['COPCI.pdf, pág. 16']);
 });

@@ -96,3 +96,54 @@ export function findVerifiedZoneValidityAnswer(question, documents) {
     mode: 'verificada',
   };
 }
+
+export function findVerifiedInvestmentStabilityAnswer(question, documents) {
+  const terms = new Set(normalizeTerms(question));
+  const asksForInvestmentAmount = ['monto', 'minimo', 'inversion']
+    .some((term) => terms.has(term));
+  const asksForStabilityOnRequest = (
+    terms.has('estabilidad')
+    && terms.has('tributaria')
+    && terms.has('peticion')
+    && terms.has('parte')
+  );
+  if (!asksForInvestmentAmount || !asksForStabilityOnRequest) return null;
+
+  const article = documents.find(({ text }) => {
+    const normalizedText = text.replace(/\s+/g, ' ');
+    return /estabilidad tributaria/i.test(normalizedText)
+      && /a petición de parte/i.test(normalizedText)
+      && /monto de la inversión sea mayor a 100 millones de dólares/i.test(normalizedText);
+  });
+  if (!article) return null;
+
+  const repealNoteExists = documents.some(({ text }) => (
+    /Ley 0 derogada por Ley/i.test(text)
+    && /9 de Mayo del 2019/i.test(text)
+  ));
+  const currentStatusNote = repealNoteExists
+    ? 'Advertencia: el corpus también indica que ese capítulo fue derogado en 2019. Por tanto, esta es la cifra del texto incorporado, no una confirmación de que siga vigente; debe contrastarse con la versión oficial actual.'
+    : 'El documento consultado no permite confirmar si esta disposición sigue vigente; debe contrastarse con la versión oficial actual.';
+
+  return {
+    answer: `El texto del COPCI incluido en el documento exige una inversión mayor a USD 100 millones (no basta con exactamente USD 100 millones) para conceder estabilidad tributaria a petición de parte. ${currentStatusNote}`,
+    sources: [`${article.source}, pág. ${article.page}`],
+    mode: 'verificada',
+  };
+}
+
+export function createExtractiveFallback(documents) {
+  const excerpts = documents.slice(0, 3).map(({ text }) => {
+    const excerpt = text.trim();
+    return `“${excerpt.length > 900 ? `${excerpt.slice(0, 900).trimEnd()}…` : excerpt}”`;
+  });
+
+  return {
+    answer: [
+      'No se pudo iniciar el modelo de respuesta en este dispositivo. Para no inventar una interpretación, te muestro los fragmentos más relacionados del documento:',
+      ...excerpts,
+    ].join('\n\n'),
+    sources: [...new Set(documents.map(({ source, page }) => `${source}, pág. ${page}`))],
+    mode: 'extractiva',
+  };
+}

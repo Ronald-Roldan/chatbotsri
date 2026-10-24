@@ -1,4 +1,9 @@
-import { findVerifiedZoneValidityAnswer, retrieveDocuments } from './retrieval.js';
+import {
+  createExtractiveFallback,
+  findVerifiedInvestmentStabilityAnswer,
+  findVerifiedZoneValidityAnswer,
+  retrieveDocuments,
+} from './retrieval.js';
 
 const MODEL_ID = 'Llama-3.2-1B-Instruct-q4f16_1-MLC';
 const HUGGING_FACE_MODEL = 'mlc-ai/Llama-3.2-1B-Instruct-q4f16_1-MLC';
@@ -67,6 +72,8 @@ export async function answerQuestion(question, onProgress = () => {}) {
   const documents = await loadDocuments();
   const verifiedAnswer = findVerifiedZoneValidityAnswer(question, documents);
   if (verifiedAnswer) return verifiedAnswer;
+  const verifiedInvestmentAnswer = findVerifiedInvestmentStabilityAnswer(question, documents);
+  if (verifiedInvestmentAnswer) return verifiedInvestmentAnswer;
 
   const matches = retrieveDocuments(question, documents);
   if (matches.length === 0) {
@@ -80,26 +87,33 @@ export async function answerQuestion(question, onProgress = () => {}) {
   const context = matches
     .map((document) => `[Fuente: ${document.source}, pág. ${document.page}]\n${document.text}`)
     .join('\n\n');
-  const engine = await loadModel(onProgress);
-  const result = await engine.chat.completions.create({
-    messages: [
-      {
-        role: 'system',
-        content: 'Eres un asistente jurídico-documental del SRI. Contesta en español, de forma directa y precisa, exclusivamente con el contexto proporcionado. Distingue la pregunta concreta de otros artículos que compartan palabras. Para cifras, plazos y requisitos, prioriza el artículo cuyo encabezado y tema coincidan con la pregunta; no confundas funciones del CEPAI con plazos de vigencia. Si no hay evidencia suficiente, dilo sin completar con conocimiento externo. No inventes artículos ni fuentes. Cita el artículo solo si está identificado en el contexto. Máximo 120 palabras.',
-      },
-      {
-        role: 'user',
-        content: `Contexto oficial:\n${context}\n\nPregunta: ${question}`,
-      },
-    ],
-    temperature: 0.1,
-    max_tokens: 320,
-  });
+  try {
+    const engine = await loadModel(onProgress);
+    const result = await engine.chat.completions.create({
+      messages: [
+        {
+          role: 'system',
+          content: 'Eres un asistente jurídico-documental del SRI. Contesta en español, de forma directa y precisa, exclusivamente con el contexto proporcionado. Distingue la pregunta concreta de otros artículos que compartan palabras. Para cifras, plazos y requisitos, prioriza el artículo cuyo encabezado y tema coincidan con la pregunta; no confundas funciones del CEPAI con plazos de vigencia. Si no hay evidencia suficiente, dilo sin completar con conocimiento externo. No inventes artículos ni fuentes. Cita el artículo solo si está identificado en el contexto. Máximo 120 palabras.',
+        },
+        {
+          role: 'user',
+          content: `Contexto oficial:\n${context}\n\nPregunta: ${question}`,
+        },
+      ],
+      temperature: 0.1,
+      max_tokens: 320,
+    });
+    const answer = result.choices[0]?.message?.content?.trim();
+    if (!answer) throw new Error('El modelo no produjo una respuesta.');
 
-  return {
-    answer: result.choices[0]?.message?.content?.trim()
-      || 'El modelo no produjo una respuesta. Inténtalo nuevamente.',
-    sources: [...new Set(matches.map((document) => `${document.source}, pág. ${document.page}`))],
-    mode: 'generada',
-  };
+    return {
+      answer,
+      sources: [...new Set(matches.map((document) => `${document.source}, pág. ${document.page}`))],
+      mode: 'generada',
+    };
+  } catch (error) {
+    enginePromise = undefined;
+    console.error('Falló el modelo local; se mostrarán extractos documentales.', error);
+    return createExtractiveFallback(matches);
+  }
 }
