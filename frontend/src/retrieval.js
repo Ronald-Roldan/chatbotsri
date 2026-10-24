@@ -133,7 +133,8 @@ export function findVerifiedInvestmentStabilityAnswer(question, documents) {
 }
 
 export function createExtractiveFallback(documents) {
-  const excerpts = documents.slice(0, 3).map(({ text }) => {
+  const mostRelevantDocuments = documents.slice(0, 1);
+  const excerpts = mostRelevantDocuments.map(({ text }) => {
     const excerpt = text.trim();
     return `“${excerpt.length > 900 ? `${excerpt.slice(0, 900).trimEnd()}…` : excerpt}”`;
   });
@@ -143,7 +144,9 @@ export function createExtractiveFallback(documents) {
       'No se pudo iniciar el modelo de respuesta en este dispositivo. Para no inventar una interpretación, te muestro los fragmentos más relacionados del documento:',
       ...excerpts,
     ].join('\n\n'),
-    sources: [...new Set(documents.map(({ source, page }) => `${source}, pág. ${page}`))],
+    sources: [...new Set(
+      mostRelevantDocuments.map(({ source, page }) => `${source}, pág. ${page}`),
+    )],
     mode: 'extractiva',
   };
 }

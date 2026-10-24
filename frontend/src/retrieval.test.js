@@ -95,10 +95,12 @@ test('investment stability threshold is not inferred when the document lacks it'
 test('model fallback returns cited document excerpts instead of a failed chat', () => {
   const answer = createExtractiveFallback([
     { text: 'El monto de inversión será mayor a 100 millones.', source: 'COPCI.pdf', page: 16 },
+    { text: 'Este fragmento no responde la consulta.', source: 'Otro.pdf', page: 95 },
   ]);
 
   assert.equal(answer.mode, 'extractiva');
   assert.match(answer.answer, /No se pudo iniciar el modelo/);
   assert.match(answer.answer, /mayor a 100 millones/);
+  assert.doesNotMatch(answer.answer, /no responde la consulta/);
   assert.deepEqual(answer.sources, ['COPCI.pdf, pág. 16']);
 });
