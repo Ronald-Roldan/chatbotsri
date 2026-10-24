@@ -21,7 +21,7 @@ npm run dev
 
 Abre la dirección local que indique Vite. La primera pregunta descarga el modelo WebLLM al navegador; la descarga puede ser grande y requiere conexión a Internet. El modelo se almacena en la caché del navegador y las consultas posteriores se procesan en el equipo. El rendimiento depende de la memoria y la GPU disponibles.
 
-### Publicar gratis en Cloudflare Pages
+### Publicar gratis en Cloudflare Workers
 
 1. Genera o actualiza el corpus estático desde los PDF:
 
@@ -32,12 +32,12 @@ Abre la dirección local que indique Vite. La primera pregunta descarga el model
    py scripts\export_web_corpus.py
    ```
 
-2. Sube los cambios del proyecto a un repositorio GitHub.
-3. En Cloudflare, crea un proyecto de **Workers & Pages** y conecta el repositorio.
-4. Configura el directorio raíz como `frontend`, el comando de compilación como `npm run build` y el directorio de salida como `dist`.
-5. No configures URL de API ni claves de IA. La aplicación es estática y no usa un servidor backend.
+2. Sube el contenido de `frontend/` a la raíz del repositorio GitHub conectado a Cloudflare. Incluye `worker.js` y `wrangler.jsonc`.
+3. En la configuración de compilación del Worker, usa `npm run build` como comando de compilación y `npx wrangler deploy` como comando de despliegue.
+4. El archivo `wrangler.jsonc` publica `dist` como assets y enruta `/model/*` al Worker para descargar el modelo con encabezados CORS. No cambies el directorio raíz del repositorio si este ya contiene directamente `package.json`.
+5. No configures URL de API ni claves de IA. El Worker solo reenvía rutas permitidas de los archivos públicos del modelo y sirve el sitio.
 
-El sitio y el corpus normativo serán públicos. Las preguntas se procesan en el navegador, pero la primera carga del modelo descarga sus archivos desde el proveedor de modelos. La disponibilidad del plan gratuito de alojamiento está sujeta a las condiciones de Cloudflare.
+El sitio y el corpus normativo serán públicos. Las preguntas se procesan en el navegador; el Worker reenvía solo los archivos del modelo permitidos desde Hugging Face y GitHub para evitar errores CORS. La primera carga del modelo descarga alrededor de 700 MB. La disponibilidad y cuotas del plan gratuito de alojamiento están sujetas a las condiciones de Cloudflare.
 
 ## Actualizar los documentos
 

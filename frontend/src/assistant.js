@@ -1,8 +1,25 @@
 import { findVerifiedZoneValidityAnswer, retrieveDocuments } from './retrieval.js';
 
 const MODEL_ID = 'Llama-3.2-1B-Instruct-q4f16_1-MLC';
+const HUGGING_FACE_MODEL = 'mlc-ai/Llama-3.2-1B-Instruct-q4f16_1-MLC';
+const MODEL_LIBRARY = 'mlc-ai/binary-mlc-llm-libs/main/web-llm-models/v0_2_86/base/Llama-3.2-1B-Instruct-q4f16_1_cs1k-webgpu.wasm';
 let documentsPromise;
 let enginePromise;
+
+function createAppConfig(prebuiltAppConfig) {
+  return {
+    ...prebuiltAppConfig,
+    model_list: prebuiltAppConfig.model_list.map((model) => (
+      model.model_id === MODEL_ID
+        ? {
+          ...model,
+          model: `${window.location.origin}/model/hf/${HUGGING_FACE_MODEL}`,
+          model_lib: `${window.location.origin}/model/github/${MODEL_LIBRARY}`,
+        }
+        : model
+    )),
+  };
+}
 
 export function loadDocuments() {
   documentsPromise ??= fetch('/documents.json')
@@ -31,7 +48,8 @@ function loadModel(onProgress) {
   }
 
   enginePromise ??= import('@mlc-ai/web-llm')
-    .then(({ CreateMLCEngine }) => CreateMLCEngine(MODEL_ID, {
+    .then(({ CreateMLCEngine, prebuiltAppConfig }) => CreateMLCEngine(MODEL_ID, {
+      appConfig: createAppConfig(prebuiltAppConfig),
       initProgressCallback: ({ text }) => onProgress(text),
     }))
     .catch((error) => {
