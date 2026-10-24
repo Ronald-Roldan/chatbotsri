@@ -31,12 +31,32 @@ function requestedArticleNumber(question) {
   return normalizedQuestion.match(/\b(?:articulo|art)\.?\s*(\d+(?:\.\d+)?)/)?.[1] ?? null;
 }
 
+function extractArticleExcerpt(text, articleNumber) {
+  const escapedArticleNumber = articleNumber.replace('.', '\\.');
+  const headingPattern = new RegExp(
+    `(?:^|\\n)\\s*Art\\.?\\s*${escapedArticleNumber}(?![\\d.])`,
+    'im',
+  );
+  const headingMatch = headingPattern.exec(text);
+  if (!headingMatch) return null;
+
+  const articleStart = headingMatch.index + headingMatch[0].search(/Art/i);
+  const articleEnd = new RegExp(
+    '\\n\\s*Art\\.?\\s*\\d+(?:\\.\\d+)?(?![\\d.])',
+    'gim',
+  );
+  articleEnd.lastIndex = articleStart + headingMatch[0].length;
+  const nextHeading = articleEnd.exec(text);
+  return text.slice(articleStart, nextHeading?.index ?? text.length).trim();
+}
+
 export function retrieveDocuments(question, documents, limit = 5) {
   const articleNumber = requestedArticleNumber(question);
   const candidateDocuments = articleNumber
-    ? documents.filter(({ text }) => (
-      new RegExp(`\\bArt\\.?\\s*${articleNumber.replace('.', '\\.')}(?![\\d.])`, 'i').test(text)
-    ))
+    ? documents.flatMap((document) => {
+      const text = extractArticleExcerpt(document.text, articleNumber);
+      return text ? [{ ...document, text }] : [];
+    })
     : documents;
   if (candidateDocuments.length === 0) return [];
 
@@ -88,6 +108,25 @@ export function retrieveDocuments(question, documents, limit = 5) {
     .sort((left, right) => right.score - left.score)
     .slice(0, limit)
     .map(({ document }) => document);
+}
+
+export function findRequestedArticleAnswer(question, documents) {
+  const articleNumber = requestedArticleNumber(question);
+  if (!articleNumber) return null;
+
+  const article = documents
+    .map((document) => ({
+      document,
+      excerpt: extractArticleExcerpt(document.text, articleNumber),
+    }))
+    .find(({ excerpt }) => excerpt);
+  if (!article) return null;
+
+  return {
+    answer: `El artículo ${articleNumber} del COPCI establece: “${article.excerpt.replace(/\s+/g, ' ')}”`,
+    sources: [`${article.document.source}, pág. ${article.document.page}`],
+    mode: 'extractiva',
+  };
 }
 
 export function findVerifiedZoneValidityAnswer(question, documents) {

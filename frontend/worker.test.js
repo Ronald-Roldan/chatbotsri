@@ -64,26 +64,24 @@ test('API responds with the verified Article 46 answer and page 24 source', asyn
   assert.deepEqual(body.sources, ['COPCI.pdf, pág. 24']);
 });
 
-test('API calls Cloudflare hosted inference with retrieved text and source citations', async () => {
+test('API returns only the exact requested article and its source page', async () => {
   let model;
-  let options;
   const response = await worker.fetch(
     createQuestionRequest('¿Qué establece el artículo 16.1 sobre estabilidad jurídica de la inversión?'),
     createEnv(async (modelId, input) => {
       model = modelId;
-      options = input;
-      return { response: 'La estabilidad jurídica puede cubrir normativa sectorial declarada esencial.' };
+      return { response: input.messages[1].content };
     }),
   );
   const body = await response.json();
 
   assert.equal(response.status, 200);
-  assert.equal(model, '@cf/meta/llama-3.2-1b-instruct');
-  assert.match(options.messages[1].content, /Art\. 16\.1/);
-  assert.doesNotMatch(options.messages[1].content, /Las modalidades de inversión/);
-  assert.match(options.messages[1].content, /COPCI\.pdf, pág\. 10/);
+  assert.equal(model, undefined);
+  assert.match(body.answer, /Art\. 16\.1/);
+  assert.match(body.answer, /plazo del contrato de inversión/);
+  assert.doesNotMatch(body.answer, /Modalidades de inversión/);
   assert.match(body.answer, /estabilidad jurídica/);
-  assert.equal(body.mode, 'generada');
+  assert.equal(body.mode, 'extractiva');
   assert.deepEqual(body.sources, ['COPCI.pdf, pág. 10']);
 });
 

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   createExtractiveFallback,
+  findRequestedArticleAnswer,
   findVerifiedInvestmentStabilityAnswer,
   findVerifiedZoneValidityAnswer,
   retrieveDocuments,
@@ -85,7 +86,29 @@ test('an explicitly requested article excludes a neighboring article even on the
   assert.equal(matches.length, 1);
   assert.match(matches[0].text, /estabilidad jurídica de la inversión/i);
   assert.doesNotMatch(matches[0].text, /Las modalidades y sus excepciones/);
+  assert.doesNotMatch(matches[0].text, /Art\. 16\.2/);
   assert.deepEqual(retrieveDocuments('¿Qué establece el artículo 99?', documents), []);
+});
+
+test('explicit article answers quote only that article and cite its page', () => {
+  const documents = [
+    {
+      text: 'Art. 16 Modalidades. Las modalidades se establecerán en el Reglamento.\nArt. 16.1\nEstabilidad jurídica de la inversión. La estabilidad será igual al plazo del contrato.\nArt. 16.2\nOtra disposición.',
+      source: 'COPCI.pdf',
+      page: 10,
+    },
+  ];
+
+  const answer = findRequestedArticleAnswer(
+    '¿Qué establece el artículo 16.1 sobre estabilidad jurídica?',
+    documents,
+  );
+
+  assert.equal(answer.mode, 'extractiva');
+  assert.match(answer.answer, /Estabilidad jurídica de la inversión/);
+  assert.match(answer.answer, /plazo del contrato/);
+  assert.doesNotMatch(answer.answer, /Modalidades|Otra disposición/);
+  assert.deepEqual(answer.sources, ['COPCI.pdf, pág. 10']);
 });
 
 test('investment stability answer preserves the greater-than threshold and repeal warning', () => {

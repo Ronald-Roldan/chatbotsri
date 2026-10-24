@@ -1,5 +1,6 @@
 import {
   createExtractiveFallback,
+  findRequestedArticleAnswer,
   findVerifiedInvestmentStabilityAnswer,
   findVerifiedZoneValidityAnswer,
   retrieveDocuments,
@@ -64,6 +65,9 @@ async function answerQuestion(request, env) {
   const verifiedAnswer = findVerifiedZoneValidityAnswer(question, documents)
     ?? findVerifiedInvestmentStabilityAnswer(question, documents);
   if (verifiedAnswer) return jsonResponse(verifiedAnswer);
+
+  const articleAnswer = findRequestedArticleAnswer(question, documents);
+  if (articleAnswer) return jsonResponse(articleAnswer);
 
   const matches = retrieveDocuments(question, documents);
   if (matches.length === 0) {
