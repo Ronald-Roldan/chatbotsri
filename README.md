@@ -1,75 +1,60 @@
 # Asistente virtual documental del SRI
 
-Prototipo académico para consultar documentos tributarios del Servicio de Rentas Internas (SRI) mediante recuperación documental y un modelo de lenguaje ejecutado localmente con Ollama.
+Aplicación web para consultar normativa del SRI. El modo web ejecuta la búsqueda y el modelo de lenguaje dentro del navegador: no necesita una API propia, Ollama, Gemini ni una clave de proveedor de IA.
 
-## Requisitos
+## Modo web gratuito
 
-- Python 3.10 o superior.
+### Requisitos
+
 - Node.js 20.19 o superior.
-- Ollama instalado y en ejecución.
-- Los documentos PDF que se consultarán, guardados en `data/raw_pdf/`.
+- Navegador actualizado con WebGPU, por ejemplo Chrome o Edge en un equipo compatible.
 
-Descarga los modelos utilizados por defecto:
+### Probar localmente
 
-```powershell
-ollama pull phi3
-ollama pull nomic-embed-text
-```
-
-## Instalación
-
-Desde la carpeta raíz del proyecto, crea y activa un entorno virtual e instala las dependencias:
-
-```powershell
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r backend\requirements.txt
-```
-
-Instala las dependencias del frontend:
+Desde la carpeta raíz:
 
 ```powershell
 cd frontend
-npm install
-cd ..
+npm ci
+npm run dev
 ```
 
-## Incorporar documentos
+Abre la dirección local que indique Vite. La primera pregunta descarga el modelo WebLLM al navegador; la descarga puede ser grande y requiere conexión a Internet. El modelo se almacena en la caché del navegador y las consultas posteriores se procesan en el equipo. El rendimiento depende de la memoria y la GPU disponibles.
 
-Coloca los PDF en `data/raw_pdf/` y genera el índice vectorial:
+### Publicar gratis en Cloudflare Pages
 
-```powershell
-py scripts\vectorize_data.py
-```
+1. Genera o actualiza el corpus estático desde los PDF:
 
-El indexador conserva el archivo y la página de origen de cada fragmento, y procesa los textos en lotes de 16 para limitar el uso de memoria. Construye una colección temporal y solo la activa cuando todos los fragmentos se guardan correctamente; si Ollama falla, conserva el índice anterior. Necesitas suficiente memoria libre para cargar `nomic-embed-text`. Los documentos escaneados requieren OCR antes de ser indexados.
+   ```powershell
+   py -3.12 -m venv .venv
+   .\.venv\Scripts\Activate.ps1
+   pip install -r backend\requirements.txt
+   py scripts\export_web_corpus.py
+   ```
 
-## Ejecución
+2. Sube los cambios del proyecto a un repositorio GitHub.
+3. En Cloudflare, crea un proyecto de **Workers & Pages** y conecta el repositorio.
+4. Configura el directorio raíz como `frontend`, el comando de compilación como `npm run build` y el directorio de salida como `dist`.
+5. No configures URL de API ni claves de IA. La aplicación es estática y no usa un servidor backend.
 
-En una terminal, desde la raíz del proyecto, inicia la API:
+El sitio y el corpus normativo serán públicos. Las preguntas se procesan en el navegador, pero la primera carga del modelo descarga sus archivos desde el proveedor de modelos. La disponibilidad del plan gratuito de alojamiento está sujeta a las condiciones de Cloudflare.
+
+## Actualizar los documentos
+
+Coloca los PDF en `data/raw_pdf/` y ejecuta `py scripts\export_web_corpus.py`. El script conserva el nombre del documento y la página PDF en cada fragmento, y escribe el corpus que usa el sitio en `frontend\public\documents.json`. Publica el archivo actualizado junto con la aplicación. Los PDF escaneados requieren OCR antes de incorporarlos.
+
+## API local opcional
+
+El backend Python y la base vectorial se conservan para ejecutar y experimentar con la versión local de la API. No son necesarios para el modo web ni para alojar el sitio estático.
+
+Instala las dependencias, inicia Ollama con los modelos requeridos y genera el índice con `py scripts\vectorize_data.py`. Luego ejecuta:
 
 ```powershell
 uvicorn backend.main:app --reload
 ```
 
-En otra terminal inicia la interfaz:
+La API queda disponible en `http://127.0.0.1:8000` y la documentación en `/docs`. El sitio actual no consume esta API.
 
-```powershell
-cd frontend
-npm run dev
-```
+## Precisión y privacidad
 
-Vite muestra la dirección local de la interfaz. La API queda disponible en `http://127.0.0.1:8000` y su documentación interactiva en `/docs`.
-
-## Configuración
-
-La API permite configurar el modelo y los orígenes de frontend mediante variables de entorno:
-
-- `SRI_LLM_MODEL`: modelo conversacional de Ollama; por defecto `phi3`.
-- `SRI_EMBEDDING_MODEL`: modelo de embeddings; por defecto `nomic-embed-text`.
-- `SRI_CORS_ORIGINS`: orígenes permitidos separados por comas; por defecto `http://localhost:5173,http://127.0.0.1:5173`.
-- `VITE_API_URL`: URL base de la API cuando frontend y backend se despliegan en servidores distintos. En desarrollo Vite reenvía `/api` a `http://127.0.0.1:8000`.
-
-## Alcance
-
-Las respuestas se fundamentan en los documentos cargados e identifican las fuentes recuperadas. La calidad depende de que la normativa incorporada sea legible, pertinente y esté actualizada; el prototipo no sustituye la consulta de las publicaciones oficiales vigentes del SRI.
+La recuperación combina coincidencia léxica ponderada y fragmentos identificados por página. Algunas consultas conocidas tienen respuestas determinísticas; las demás se redactan con el modelo local del navegador y se limitan a los fragmentos recuperados. La calidad depende de la legibilidad y vigencia de los PDF. Contrasta las respuestas con la publicación oficial antes de tomar decisiones legales.

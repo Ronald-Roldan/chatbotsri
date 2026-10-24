@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import axios from 'axios';
+import { answerQuestion, loadDocuments } from './assistant.js';
 import './App.css';
 
-const API_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, '') ?? '';
 const HISTORY_KEY = 'sri-document-assistant-conversations';
 const EMPTY_MESSAGES = [];
 const SUGGESTED_QUESTIONS = [
@@ -25,6 +24,7 @@ function App() {
   const [mensaje, setMensaje] = useState('');
   const [cargando, setCargando] = useState(false);
   const [estadoIndice, setEstadoIndice] = useState('comprobando');
+  const [progresoModelo, setProgresoModelo] = useState('');
   const chatEndRef = useRef(null);
   const textareaRef = useRef(null);
 
@@ -43,9 +43,9 @@ function App() {
   }, [chat, cargando]);
 
   useEffect(() => {
-    axios.get(`${API_URL}/health`)
-      .then(({ data }) => setEstadoIndice(data.indice_documental ? 'disponible' : 'incompleto'))
-      .catch(() => setEstadoIndice('sin-conexion'));
+    loadDocuments()
+      .then(() => setEstadoIndice('disponible'))
+      .catch(() => setEstadoIndice('incompleto'));
   }, []);
 
   const iniciarConversacion = () => {
@@ -79,7 +79,7 @@ function App() {
     setCargando(true);
 
     try {
-      const { data } = await axios.post(`${API_URL}/api/chat`, { pregunta });
+      const data = await answerQuestion(pregunta, setProgresoModelo);
       setConversaciones((prev) => prev.map((item) => item.id === id
         ? {
           ...item,
@@ -88,18 +88,17 @@ function App() {
             ...item.mensajes,
             {
               remitente: 'asistente',
-              texto: data.respuesta,
-              fuentes: data.fuentes ?? [],
-              modo: data.modo,
+              texto: data.answer,
+              fuentes: data.sources,
+              modo: data.mode,
             },
           ],
         }
         : item));
     } catch (error) {
-      const detalle = error.response?.data?.detail;
-      const textoError = typeof detalle === 'string'
-        ? detalle
-        : 'No se pudo conectar con el servicio. Comprueba que la API esté disponible e inténtalo de nuevo.';
+      const textoError = error instanceof Error
+        ? error.message
+        : 'No se pudo procesar la consulta en este navegador.';
       setConversaciones((prev) => prev.map((item) => item.id === id
         ? {
           ...item,
@@ -108,6 +107,7 @@ function App() {
         : item));
     } finally {
       setCargando(false);
+      setProgresoModelo('');
     }
   };
 
@@ -121,8 +121,7 @@ function App() {
   const estadoTexto = {
     disponible: 'Base documental lista',
     incompleto: 'Índice documental pendiente',
-    'sin-conexion': 'Servicio no disponible',
-    comprobando: 'Conectando con el servicio',
+    comprobando: 'Cargando documentos',
   }[estadoIndice];
 
   return (
@@ -162,7 +161,7 @@ function App() {
             <span className={`status-dot status-${estadoIndice}`} aria-hidden="true" />
             <span>{estadoTexto}</span>
           </div>
-          <p>Respuestas basadas en documentos del SRI</p>
+          <p>Modelo local en el navegador. Primera carga requiere conexión.</p>
         </footer>
       </aside>
 
@@ -187,7 +186,7 @@ function App() {
             <div className="welcome-panel">
               <div className="welcome-mark" aria-hidden="true">SRI</div>
               <h1>¿En qué puedo ayudarte?</h1>
-              <p>Consulta documentos tributarios y revisa las fuentes utilizadas en cada respuesta.</p>
+              <p>Consulta normativa con un modelo local. Tus preguntas se procesan en este navegador.</p>
               <div className="suggestions" aria-label="Preguntas sugeridas">
                 {SUGGESTED_QUESTIONS.map((question) => (
                   <button
@@ -221,6 +220,8 @@ function App() {
                         <p className="message-label">
                           {item.modo === 'extractiva'
                             ? 'Extractos documentales · sin interpretación IA'
+                            : item.modo === 'verificada'
+                              ? 'Respuesta basada en fuente oficial'
                             : 'Asistente documental'}
                         </p>
                         <p className="message-text">{item.texto}</p>
@@ -241,7 +242,7 @@ function App() {
                 <div className="loading-message" role="status">
                   <span className="assistant-avatar" aria-hidden="true">SRI</span>
                   <span className="loading-indicator" aria-hidden="true" />
-                  Revisando documentos...
+                  {progresoModelo || 'Buscando en documentos y preparando el modelo local...'}
                 </div>
               )}
               <div ref={chatEndRef} />
