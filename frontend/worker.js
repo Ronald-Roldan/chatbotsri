@@ -22,7 +22,7 @@ function getModelUrl(pathname) {
 
     const filename = modelPath.slice(HUGGING_FACE_MODEL_PREFIX.length);
     const isAllowedFile = (
-      /^(mlc-chat-config|ndarray-cache|tokenizer|tokenizer_config)\.json$/.test(filename)
+      /^(mlc-chat-config|ndarray-cache|tensor-cache|tokenizer|tokenizer_config)\.json$/.test(filename)
       || /^params_shard_\d+\.bin$/.test(filename)
     );
     return isAllowedFile ? `https://huggingface.co/${modelPath}` : null;

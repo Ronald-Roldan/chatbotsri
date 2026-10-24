@@ -33,6 +33,33 @@ test('proxy allows CORS and streams the approved model file', async () => {
   }
 });
 
+test('proxy allows the WebLLM tensor cache manifest', async () => {
+  const originalFetch = globalThis.fetch;
+  let upstreamUrl;
+  globalThis.fetch = async (url) => {
+    upstreamUrl = url;
+    return new Response('{"records":[]}', {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  };
+
+  try {
+    const response = await worker.fetch(
+      new Request(
+        'https://assistant.example/model/hf/mlc-ai/Llama-3.2-1B-Instruct-q4f16_1-MLC/resolve/main/tensor-cache.json',
+      ),
+      { ASSETS: { fetch: () => new Response('static asset') } },
+    );
+
+    assert.equal(upstreamUrl, 'https://huggingface.co/mlc-ai/Llama-3.2-1B-Instruct-q4f16_1-MLC/resolve/main/tensor-cache.json');
+    assert.equal(response.status, 200);
+    assert.equal(await response.text(), '{"records":[]}');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('proxy rejects arbitrary upstream paths and methods', async () => {
   const env = { ASSETS: { fetch: () => new Response('static asset') } };
   const badPath = await worker.fetch(
