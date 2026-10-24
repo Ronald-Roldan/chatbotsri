@@ -32,17 +32,13 @@ Abre la dirección local que indique Vite. La primera pregunta descarga el model
    py scripts\export_web_corpus.py
    ```
 
-2. Conecta el repositorio principal `Ronald-Roldan/chatbotsri` a GitHub Actions. El flujo `.github/workflows/deploy-cloudflare.yml` ejecuta pruebas, lint y compilación en cada cambio de `frontend/` en `main`.
-3. En GitHub, abre **Settings > Secrets and variables > Actions** y crea:
-   - El secreto `CLOUDFLARE_API_TOKEN`, con permisos de Cloudflare **Workers Scripts: Edit** y **Account Settings: Read**.
-   - La variable `CLOUDFLARE_ACCOUNT_ID`, con el ID de cuenta de Cloudflare.
-   - La variable `CLOUDFLARE_DEPLOY_ENABLED`, con el valor `true` para activar el despliegue automático.
-4. Después de añadir estas variables, ejecuta el workflow **Validate and deploy SRI assistant** desde la pestaña **Actions**, o sube un nuevo cambio a `frontend/`. El Worker se publica desde `frontend/wrangler.jsonc`.
-5. No configures URL de API ni claves de IA. El Worker solo reenvía rutas permitidas de los archivos públicos del modelo y sirve el sitio.
+2. En Cloudflare **Workers & Pages**, conecta el Worker `frontend` con `Ronald-Roldan/chatbotsri`, rama `main`, y configura `frontend` como directorio raíz. Usa `npm run build` como comando de compilación y `npx wrangler deploy --config wrangler.jsonc` como comando de implementación.
+3. Cloudflare Workers Builds implementa automáticamente los cambios de `main`. GitHub Actions ejecuta por separado las pruebas, el lint y la compilación; no necesita secretos ni variables de Cloudflare.
+4. No configures URL de API ni claves de IA. El Worker solo reenvía rutas permitidas de los archivos públicos del modelo y sirve el sitio.
 
 El sitio y el corpus normativo serán públicos. Las preguntas se procesan en el navegador; el Worker reenvía solo los archivos del modelo permitidos desde Hugging Face y GitHub para evitar errores CORS. La primera carga del modelo descarga alrededor de 700 MB. La disponibilidad y cuotas del plan gratuito de alojamiento están sujetas a las condiciones de Cloudflare.
 
-El despliegue también puede ejecutarse manualmente desde un equipo que ya tenga Wrangler autenticado: desde `frontend/`, ejecuta `npm ci`, `npm run build` y `npx wrangler@4.152.0 deploy --config wrangler.jsonc`.
+El despliegue también puede ejecutarse manualmente desde un equipo que ya tenga Wrangler autenticado: desde `frontend/`, ejecuta `npm ci`, `npm run build` y `npx wrangler deploy --config wrangler.jsonc`.
 
 ## Actualizar los documentos
 
