@@ -98,7 +98,7 @@ test('explicit article answers quote only that article and cite its page', () =>
       page: 10,
     },
     {
-      text: 'Art. 16.1\nEstabilidad jurídica de la inversión. La estabilidad será igual al plazo del contrato.\nArt. 16.2\nOtra disposición.',
+      text: 'Art. 16.1\nEstabilidad jurídica de la inversión. La estabilidad de los correspondientes contrato s de concesión será igual al plazo del contrato.\nArt. 16.2\nOtra disposición.',
       source: 'COPCI.pdf',
       page: 10,
     },
@@ -111,6 +111,8 @@ test('explicit article answers quote only that article and cite its page', () =>
 
   assert.equal(answer.mode, 'extractiva');
   assert.match(answer.answer, /Estabilidad jurídica de la inversión/);
+  assert.match(answer.answer, /contratos de concesión/);
+  assert.doesNotMatch(answer.answer, /contrato s/);
   assert.match(answer.answer, /plazo del contrato/);
   assert.doesNotMatch(answer.answer, /Otra disposición/);
   assert.deepEqual(answer.sources, ['COPCI.pdf, pág. 10']);

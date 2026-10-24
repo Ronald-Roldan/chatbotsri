@@ -129,7 +129,9 @@ export function findRequestedArticleAnswer(question, documents) {
   if (!article) return null;
 
   return {
-    answer: `El artículo ${articleNumber} del COPCI establece: “${article.excerpt.replace(/\s+/g, ' ')}”`,
+    answer: `El artículo ${articleNumber} del COPCI establece: “${article.excerpt
+      .replace(/\bcontrato\s+s\b/gi, 'contratos')
+      .replace(/\s+/g, ' ')}”`,
     sources: [`${article.document.source}, pág. ${article.document.page}`],
     mode: 'extractiva',
   };
