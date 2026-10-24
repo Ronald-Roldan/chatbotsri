@@ -93,7 +93,12 @@ test('an explicitly requested article excludes a neighboring article even on the
 test('explicit article answers quote only that article and cite its page', () => {
   const documents = [
     {
-      text: 'Art. 16 Modalidades. Las modalidades se establecerán en el Reglamento.\nArt. 16.1\nEstabilidad jurídica de la inversión. La estabilidad será igual al plazo del contrato.\nArt. 16.2\nOtra disposición.',
+      text: 'Art. 16.1',
+      source: 'COPCI.pdf',
+      page: 10,
+    },
+    {
+      text: 'Art. 16.1\nEstabilidad jurídica de la inversión. La estabilidad será igual al plazo del contrato.\nArt. 16.2\nOtra disposición.',
       source: 'COPCI.pdf',
       page: 10,
     },
@@ -107,8 +112,30 @@ test('explicit article answers quote only that article and cite its page', () =>
   assert.equal(answer.mode, 'extractiva');
   assert.match(answer.answer, /Estabilidad jurídica de la inversión/);
   assert.match(answer.answer, /plazo del contrato/);
-  assert.doesNotMatch(answer.answer, /Modalidades|Otra disposición/);
+  assert.doesNotMatch(answer.answer, /Otra disposición/);
   assert.deepEqual(answer.sources, ['COPCI.pdf, pág. 10']);
+});
+
+test('article retrieval ignores a heading-only chunk when the body is in an overlap', () => {
+  const documents = [
+    {
+      text: 'Art. 16.1',
+      source: 'COPCI.pdf',
+      page: 10,
+    },
+    {
+      text: 'Art. 16.1\nEstabilidad jurídica de la inversión. La estabilidad será igual al plazo del contrato.',
+      source: 'COPCI.pdf',
+      page: 10,
+    },
+  ];
+
+  const matches = retrieveDocuments(
+    '¿Qué establece el artículo 16.1 sobre estabilidad jurídica?',
+    documents,
+  );
+  assert.equal(matches.length, 1);
+  assert.match(matches[0].text, /Estabilidad jurídica/);
 });
 
 test('investment stability answer preserves the greater-than threshold and repeal warning', () => {

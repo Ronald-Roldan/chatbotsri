@@ -45,9 +45,15 @@ function extractArticleExcerpt(text, articleNumber) {
     '\\n\\s*Art\\.?\\s*\\d+(?:\\.\\d+)?(?![\\d.])',
     'gim',
   );
-  articleEnd.lastIndex = articleStart + headingMatch[0].length;
+  articleEnd.lastIndex = headingMatch.index + headingMatch[0].length;
   const nextHeading = articleEnd.exec(text);
-  return text.slice(articleStart, nextHeading?.index ?? text.length).trim();
+  const excerpt = text
+    .slice(articleStart, nextHeading?.index ?? text.length)
+    .replace(/\n\s*Nota:\s*$/i, '')
+    .trim();
+  const articleContentStart = headingMatch.index + headingMatch[0].length - articleStart;
+  if (!excerpt.slice(articleContentStart).trim()) return null;
+  return excerpt;
 }
 
 export function retrieveDocuments(question, documents, limit = 5) {
